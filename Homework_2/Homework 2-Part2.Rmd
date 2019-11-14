@@ -1,0 +1,221 @@
+---
+title: "Homework 2-Part2"
+author: "Pol Ribó León"
+date: "25 de junio de 2019"
+output: html_document
+---
+
+**2a)  Starting at time $t=0$ in the state  $X_0=1$ simulate the Markov chain with distribution assigned as above for $t=1000$ consecutive times-**
+
+```{r}
+set.seed(1234)
+#Transition Probability Matrix
+M = matrix(c(0,1/2,1/2,5/8,1/8,1/4,2/3,1/3,0), nrow=3,ncol=3, byrow = T)
+
+t=1000
+ch = as.numeric(t)
+
+ch[1]=1
+
+for (i in 2:t){
+  state_space=sample(1:3,1, prob=M[ch[i-1],])
+  ch[i]=state_space
+}
+head(ch,20)
+
+```
+
+**2b)  compute the empirical relative frequency of the two states in your simulation**
+  
+```{r}
+
+#results
+prop.table(table(ch))
+
+```
+
+**2c)Repeat the simulation for 500 times and record only the final state at time $t=1000$ for each of the 500 simulated chains. Compute the relative frequency of the 500 final states.**
+  
+  
+```{r}
+set.seed(1234)
+n=500
+ch1=as.numeric(n)
+
+#SIMULATION
+for (i in 1:n){
+  s_chain=as.numeric(t)
+  s_chain[1]=1
+  
+  for (j in 2:t){
+    state_space=sample(1:3,1, prob=M[s_chain[j-1],])
+    s_chain[j]=state_space
+}
+  ch1[i]=s_chain[t]
+}
+prop.table(table(ch1))
+
+```
+
+```{r}
+
+#COMPARISON OF FREQUENCIES
+cat("PART 2B:", prop.table(table(ch)), "\nPART 2C:", prop.table(table(ch1)))
+```
+
+
+**What distribution are you approximating in this way?**
+**Try to formalize the difference between this point and the previous point. **
+
+To do this, we will take a look first at how the empirical relative frequency fluctuates.
+```{r}
+# fluctuation function
+fluct_freq <- function(chain, state){
+  freq <- rep(NA, length(chain))
+  counter = 0
+  for (i in 1:length(chain)){
+    if(chain[i] == state){
+      counter = counter + 1
+  }
+    freq[i] <- counter/i
+  }
+  return(freq)
+}
+
+```
+
+In this way, we get a visual representation.
+
+```{r}
+state_1B <- fluct_freq(chain = ch, 1)
+state_2B <- fluct_freq(chain = ch, 2)
+state_3B <- fluct_freq(chain = ch, 3)
+state_1C <- fluct_freq(chain = ch1, 1)
+state_2C <- fluct_freq(chain = ch1, 2)
+state_3C <- fluct_freq(chain = ch1, 3)
+
+```
+
+```{r}
+plot(state_1B[1:500], type="l", ylim = c(0,1), lwd = 1, lty = 1, xlab = "Nº of Simulations", ylab = expression("ERF"), col="blue")
+lines(state_2B[1:500], type="l", lty = 1, col = "red")
+lines(state_3B[1:500], type="l", lty = 1, col = "green")
+lines(state_1C, type="l", lwd=2,lty = 2,col="blue")
+lines(state_2C, type="l", lwd=2,lty = 2, col = "red")
+lines(state_3C, type="l", lwd=2,lty = 2, col = "green")
+legend(x="topright", 
+       legend=c("State 1B", "State 2B", "State 3B",
+                "State 1C", "State 2C", "State 3C"),
+       col=c("blue","red", "green","blue","red", "green"), 
+       lty=c(1,1,1,2,2,2), cex=0.6)
+```
+
+The main difference between the two simulations lays in the fact that, since in part C we are only simulating 500 times the state t=1000, the results are not strictly following a Markov Chain, since one observation doesn't take into consideration its previous(t-1, as it should be in a Markov Chain).
+
+
+Also, thanks to the graph we can see that, although the ERF fluctuate a lot at the beggining, it is easily appreciated that the states tend to converge to very similar values.
+
+
+**2d)  compute the theoretical stationary distribution $\pi$ and explain how you have obtained it**
+
+Theoretical Stationary Distribution:
+
+\begin{equation}
+\pi=\pi P
+\end{equation}
+
+Hence,
+
+\begin{equation}
+\boldsymbol{\pi}=\left[\begin{array}{llll}{\pi_{1}\pi_{2} \pi_{3}}\end{array}\right]\left[\begin{array}{rrr}{0} & {1 / 2} & {1 / 2} \\ {5 / 8} & {1 / 8} & {1 / 4} \\ {2 / 3} & {1 / 3} & {0}\end{array}\right]
+\end{equation}
+
+
+To find the stationary distribution, we will multiply the Matrix by itself until it converges.
+
+```{r}
+sup=M
+for (i in 1:t){
+sup=sup%*%M
+}
+sup
+```
+
+By this, we can conclude that:
+
+\begin{equation}
+\boldsymbol{\pi}=\left[\pi_{1} \pi_{2} \pi_{3}\right]=[0.3917526 \quad 0.3298969 \quad 0.2783505]
+\end{equation}
+
+
+**2e)  is it well approximated by the simulated empirical relative frequencies computed in (b) and (c)?**
+
+##### At first, I check the transitions for each case and see how much they are close to the theoretical stationary values. 
+
+```{r}
+plot(state_1B[1:500], type="l", ylim = c(0,1), lwd = 1, lty = 1, xlab = "Number of Transition", ylab = expression("Empirical Frequency of states"),col="blue")
+lines(state_2B[1:500], type="l", lty = 1, col = "red")
+lines(state_3B[1:500], type="l", lty = 1, col = "green")
+lines(state_1C, type="l", lty = 2,col="blue")
+lines(state_2C, type="l", lty = 2, col = "red")
+lines(state_3C, type="l", lty = 2, col = "green")
+abline(h=sup[1], col = "yellow")
+abline(h=sup[4], col = "yellow")
+abline(h=sup[7], col = "yellow")
+legend(x="topright", 
+       legend=c("State 1B", "State 2B", "State 3B",
+                "State 1C", "State 2C", "State 3C"),
+       col=c("blue","red", "green","blue","red", "green"), 
+       lty=c(1,1,1,2,2,2), cex=0.6)
+```
+
+By looking at the graph, we can see that the ERF of 2B are converging to the theoretical stationary, meanhwile the ones on 2C are not that close and, at this number of transitions, they don't seem to converge. In this sense, I would conclude that the approximations on 2B are solid, otherwise in 2C not that much.
+
+**2f)  what happens if we start at $t=0$ from state $X_0=2$ instead of  $X_0=1$?**
+
+```{r}
+set.seed(1234)
+#STARTING AT X_0=2
+chx2 = as.numeric(t)
+chx2[1]=2
+
+for (i in 2:t){
+  state_space=sample(1:3,1, prob=M[chx2[i-1],])
+  chx2[i]=state_space
+}
+head(chx2,20)
+
+```
+
+```{r}
+cat("AT X_0=1:", round(prop.table(table(ch)),2), "\nAT X_0=2:", round(prop.table(table(chx2)),2))
+
+```
+
+Now for t=1000
+```{r}
+set.seed(1234)
+n=500
+chs2=as.numeric(n)
+
+#SIMULATION
+for (i in 1:n){
+  s_chain=as.numeric(t)
+  s_chain[1]=2
+  
+  for (j in 2:t){
+    state_space=sample(1:3,1, prob=M[s_chain[j-1],])
+    s_chain[j]=state_space
+}
+  chs2[i]=s_chain[t]
+}
+
+```
+
+
+```{r}
+cat("AT X_0=1:", prop.table(table(ch1)), "\nAT X_0=2:", prop.table(table(chs2)))
+```
+
+As we can see, the ERF are equal. Hence, it is safe to say that this MC is ergodic. A state i is said to be ergodic if it is aperiodic and positive recurrent. It can be shown that a finite state irreducible Markov chain is ergodic if it has an aperiodic state. More generally, a Markov chain is ergodic if there is a number N such that any state can be reached from any other state in any number of steps greater than or equal to a number N. In case of a fully connected transition matrix, where all transitions have a non-zero probability, this condition is fulfilled with N = 1(this precise case is ours).
+As so, it is not relevant if we start at X0=2.
