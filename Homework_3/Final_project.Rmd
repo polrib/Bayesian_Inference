@@ -1,0 +1,542 @@
+---
+title: "Final Project Stat4DS2+DS"
+author: "Pol Ribó León -1840853"
+date: "29 de julio de 2019"
+output: html_document
+---
+
+```{r include=FALSE}
+library("corrplot")
+library(R2jags)
+library(car)
+library(mcmcplots)
+```
+
+## INTRODUCTION
+
+
+Every year, the NBA (National Basketball Association) hosts what it is called the NBA Draft, where each team picks a player coming out from college. Of course, teams try to spot who might be their best choice, and to do this, besides the sharp and technical eye of the scouts, there are a few tests previous to Draft Day, all applied to the upcoming players regarding different aspects such as athelticism or physical condition. A good performance in these tests can be critical for a player to be picked high in the chart and thus, play in a team that really wants him and earn a better base salary. In this sense, there is a notable difference between players selected in the so-called first draft round(so-calle lottery picks), which consists in the first 30 best players picked, and the second round, composed by the second best 30 players.
+
+The purpose of this project is to use a regression model in order to gain insight on how the results of the tests affect a player's chances to be picked in the first or second round.  
+
+The data was taken from the site
+https://data.world/achou/nba-draft-combine-measurements
+
+
+
+## DATASET ANALYSIS
+
+The dataset cointains the results of 443 players that between 2009 and 2017 took the tests before the Draft Day and were selected either in the 1st or the 2nd round.
+
+
+```{r}
+data = read.csv('nba_draft_combine_all_years (1).csv', header=T, sep=';')
+head(data)
+
+
+```
+
+
+**VARIABLE EXPLANATION:**
+
+The response variable "Round" follows a Bernoulli distribution where  Yi= 1 if the ith player was elected in the 1st draft round let Yi = 0 if on the other hand, it was selected in the 2nd round. 
+
+The other variables from which we will infer are:
+
+-**Wingspan**: wingspan of the player, very popular measurement nowadays due to its importance in the player's optimal antropometrics.
+
+-**Vertical Jump Max**: the vertical jump is a test of an athlete’s explosive leg power. In this case, it concerns the vertical maximmum jump(without running).
+
+-**Body fat**: The body fat percentage (BFP) of a player, which is the total mass of fat divided by total body mass, multiplied by 100.
+
+-**Sprint**: time to sprint over the distance of three quarters of the court, measured in seconds.
+
+First, we will check if the dataset has any missing values.
+
+```{r}
+sum(is.na(data))
+```
+
+As we see, the dataset contains no missing values.
+
+
+
+## DATASET OVERVIEW
+
+```{r}
+summary(data)
+
+#assessing variance
+sapply(data, var)
+
+```
+
+```{r}
+par(mfrow=c(2,2))
+hist(main='Wingspan',data$Wingspan,xlab='Index',ylab='Density',col='blue')
+hist(main='Vertical Max Jump',data$Vertical..Max.,xlab='Index',ylab='Density',col='blue')
+hist(main='Body Fat',data$Body.Fat,xlab='Index',ylab='Density', col='blue')
+hist(main='Sprint',data$Sprint,xlab='Index',ylab='Density',col='blue')
+```
+
+As we see, all variables seem to follow a normal distribution, although **Body Fat** and **Sprint** have fat-tails, making them positevely skewed.
+
+
+```{r}
+#Assessing correlation
+corr = cor(data)
+corrplot.mixed(corr)
+```
+
+
+While the response variable is almost not correlated, there is a high correlation between the intercept variables, especially with the variable **Sprint**. This, more likely, may turn into multicolinearity. Multicolinearity occurs when independent variables in a regression model are correlated, and it can cause problems when fitting the model, interpreting the results and assessing the importance of the variables.
+
+
+
+```{r}
+d<- density(data$Round) # returns the density data 
+plot(d) # plots the results
+```
+
+Round $\sim$Bernoulli$\left(p_{i}\right)$
+$p_{i}=P(\text {Round}=1)$
+
+
+
+## MODEL
+
+
+The model we will try will be a logit model:
+
+\begin{equation}
+\operatorname{logit}\left(p_{i}\right)=\alpha_{0}+\alpha_{1} * x_{1, i}+\alpha_{2} * x_{2, i}+\alpha_{12} * x_{1, i} * x_{2, i}+b_{i}
+\end{equation}
+
+In our case:
+
+\begin{equation}
+\alpha_{i}=\alpha_{0}+\alpha_{1} \text {wingspan}_{i}+\alpha_{2} \text {vertical_jump}_{i}+\alpha_{3} \text {body_fat}_{i}+\alpha_{4} \text {sprint}_{i}
+\end{equation}
+
+
+The model using WinBUGS language, is:
+
+```{r}
+
+model_1 = "model{
+
+  #Likelihood
+    for(i in 1:n){
+    y[i] ~ dbern(p[i])
+    logit(p[i]) <- a0+alpha[1]*wingspan[i]+alpha[2]*vertical_max[i]+alpha[3]*body_fat[i]+alpha[4]*sprint[i]
+   }
+
+   #Priors
+   a0 ~ dnorm(0.0, 1)
+   for(z in 1:4){
+    alpha[z] ~ dnorm(0.0, 1)
+   }
+  }"
+```
+
+
+
+```{r}
+#Data
+datalist = list(y  = data$Round,
+  wingspan = data$Wingspan,
+  vertical_max=data$Vertical..Max.,
+  body_fat=data$Body.Fat,
+  sprint=data$Sprint,
+  n=nrow(data))
+```
+
+
+
+```{r}
+
+inits_list = list(alpha = c(0,0,0,0))
+
+mod1 = jags.model(textConnection(model_1),  inits = inits_list, data=datalist, n.chains=3)
+```
+
+
+Here the model is run for 10000 iterations
+
+```{r}
+params=c("a0", "alpha")
+update(mod1, 1e3)
+
+
+
+mod1_log = coda.samples(model=mod1,
+                        variable.names=params,
+                        n.iter = 10000)
+
+mod1_logch = as.mcmc(do.call(rbind, mod1_log))
+```
+
+
+
+## MCMC DIAGNOSTICS
+
+
+The results give the posterior means, posterior standard deviations,
+and posterior quantiles for each variable.
+The 'naive' standard error is the standard error of the mean,
+which captures simulation error of the mean rather than posterior
+uncertainty.
+
+```{r}
+summary(mod1_log)
+```
+
+
+After having run the model, a check on the reliability of the approximated posterior parameters is needed, as well as an assessment on the convergence of the algorithm. Convergence refers to the idea that eventually the Gibbs Sampler or the MCMC algorithm will eventually reach a stationary distribution. From this point on, it will stay in this distribution. As so, if the values obtained converge, then it is safe to say that the  distribution from where the samples are drawn is the correct one.
+TO do that, different techniques will be used.
+
+
+
+**MEAN PLOTS**
+
+
+```{r}
+rmeanplot(mod1_log)
+```
+
+
+As it is seen, the running mean plots show that except for the  'Body Fat' variable, the chains don't converge, so a good mixing is not accomplished as the means are not independent. Also, in case of stationarity it should stabilize with in while increasing k. 
+
+
+
+**TRACE PLOTS**
+
+
+```{r}
+par(mar = rep(2, 4))
+plot(mod1_log, density=FALSE,trace=TRUE)
+```
+
+As we can easily see, only the variable 'Body Fat' shows a solid random behavior, as all the other variables have trends in their sample spaces. So,the model doesn't converge.
+
+
+
+**DENSITY PLOTS**
+
+```{r}
+par(mar = rep(2, 4))
+plot(mod1_log, density=TRUE,trace=FALSE)
+```
+
+
+As they look bell-shaped, we can consider as satisfactory and a suitable performance the density plots.
+
+
+
+**AUTOCORRELATION PLOTS**
+
+```{r}
+par(mar = rep(2, 4))
+autocorr.plot(mod1_log[1])
+autocorr.plot(mod1_log[2])
+autocorr.plot(mod1_log[3])
+autocorr.diag(mod1_log[1])
+autocorr.diag(mod1_log[2])
+autocorr.diag(mod1_log[3])
+```
+
+As we apprecciate, autocorrelation of the parameters is not decreasing as it should to consider that our algorithm converges. As well, the level of autocorrelation of all of our parameters except Body_Fat is very high, which makes it difficult to assess convergence.
+The cause of autocorrelation is that the parameters in our model may be highly
+correlated, so the Gibbs Sampler will be slow to explore the entire posterior
+distribution.
+
+
+
+## Tests
+
+In this section, Gelman-Rubin test and Heidelberger-Welch test will be performed.
+
+
+
+**Gelman-Rubin**
+
+```{r}
+gelman.diag(mod1_log)
+```
+
+The potential scale reduction factor for all the variables except Body_Fat is high (should be closer to 1), showing that our chains doesn't converge and we should run them out longer to improve convergence to the stationary distribution.
+
+
+
+**Heidelberger-Welch**
+
+```{r}
+heidel.diag(mod1_log)
+```
+
+As the halfwidth test has been failed for all chains, we reject the null hypothesis that states that the sampled values come from a stationary distribution. In this case, the chain must be run out longer.
+
+
+
+**Effective Sample Size**
+
+```{r}
+effectiveSize(mod1_log)
+```
+
+As the definition of the effective sample size states;
+
+\begin{equation}
+\mathrm{ESS}=\frac{n}{1+2 \sum_{k=1}^{\infty} \rho(k)}
+\end{equation}
+
+as in all variables except Body_fat autocorrelation between lags(k) decrease so slowly, the ESS is low, which is an indicator that the MCMC model hasn't converged.
+
+
+
+## IMPROVING CONVERGENCE
+
+
+
+There are several ways to try to improve convergence. Here we applied some:
+
+**-Standardize** the variables so they have mean=0 and var=1. It has been done with the function 'scale'. It involves the creation of a new dataframe called 'data1'.
+
+**-Run for more iterations:** in this case, and according to the test results of Heidelberger-Welch, the number of iterations will be increased till 100.000.
+
+**-Change inits:** different value for initial values of the priors will be applied
+
+**-Thinning:** a thinning of 100k will be applied.
+
+**-Apply Burnin:** sometimes a low effective size number of samples is just because the chain started in a low-probability region, and found the basin of convergence (the high probability region, or typical set) only later on. To solve, a burn-in of 50.000 will be applied.
+
+
+NOTE: although eliminating the intercept was considered because the variable 'sprint' was acting like a substitute of it, after trying both models with an without the intercept, the former performed better. On the other hand, as the variables have high autocorreñation, eliminating 'sprint' was also considered.
+
+
+
+```{r}
+#standardization
+wing=scale(data$Wingspan)
+vert=scale(data$Vertical..Max.)
+body=scale(data$Body.Fat)
+sprint=scale(data$Sprint)
+
+```
+
+```{r}
+#creation of new dataframe
+data1 <- data.frame(data$Round, wing, vert, body,sprint)
+head(data1)
+
+#assessing mean and variance
+mean(data1$wing)
+var(data1$wing)
+```
+
+
+
+
+**Running the new model**
+
+```{r}
+#Data
+datalist_new = list(y  = data1$data.Round,
+  wingspan = data1$wing,
+  vertical_max=data1$vert,
+  body_fat=data1$body,
+  sprint=data1$sprint,
+  n=nrow(data1))
+```
+
+```{r}
+
+model_1_new1 = "model{
+
+  #Likelihood
+    for(i in 1:n){
+    y[i] ~ dbern(p[i])
+    logit(p[i]) = a0+alpha[1]*wingspan[i]+alpha[2]*vertical_max[i]+alpha[3]*body_fat[i]+alpha[4]*sprint[i]
+   }
+
+   #Priors
+   a0 ~ dnorm(0.0, 1.0E-06)
+   for(z in 1:4){
+    alpha[z] ~ dnorm(0.0, 1.0E-06)
+      }
+}
+"
+```
+
+
+
+```{r}
+
+inits_list_new = list(alpha = c(0,0,0,0))
+
+mod1_imp = jags.model(textConnection(model_1_new1),  inits = inits_list_new, data=datalist_new, n.chains=3)
+```
+
+
+```{r}
+params=c("a0","alpha")
+update(mod1, 1e3)
+
+
+
+mod1_log_new = coda.samples(model=mod1_imp,
+                        variable.names=params,
+                        n.iter = 100000, n.burnin = 50000, thin = 100)
+
+mod1_logch_new = as.mcmc(do.call(rbind, mod1_log_new))
+```
+
+
+
+## MCMC DIAGNOSTICS
+
+
+```{r}
+summary(mod1_log_new)
+```
+
+
+
+**MEAN PLOTS**
+
+```{r}
+rmeanplot(mod1_log_new)
+```
+
+Further samples from a parameter’s posterior distribution don't influence the calculation of the mean, as they converge.
+
+**TRACE PLOTS**
+
+
+```{r}
+par(mar = rep(2, 4))
+plot(mod1_log_new, density=FALSE,trace=TRUE)
+```
+
+The traceplots move around the mode of the distribution, expressing random behavior(no trend).
+
+**DENSITY PLOTS**
+
+```{r}
+par(mar = rep(2, 4))
+plot(mod1_log_new, density=TRUE,trace=FALSE)
+```
+
+More bell-shaped curves than in the previous model are shown.
+
+**AUTOCORRELATION PLOTS**
+
+```{r}
+par(mar = rep(2, 4))
+autocorr.plot(mod1_log_new[1])
+autocorr.plot(mod1_log_new[2])
+autocorr.plot(mod1_log_new[3])
+autocorr.diag(mod1_log_new[1])
+autocorr.diag(mod1_log_new[2])
+autocorr.diag(mod1_log_new[3])
+```
+
+The autocorrelation decreases in an appropiate rate.
+
+
+### Tests
+
+**Gelman-Rubin**
+
+```{r}
+gelman.diag(mod1_log_new)
+```
+
+The potential scale reduction factor for all the variables is 1 or close to 1.
+As well, the multivariate psrf equals 1.
+
+
+**Heidelberger-Welch**
+
+```{r}
+heidel.diag(mod1_log_new)
+```
+
+As we can see, all test are passed, so we can argue that the draws come from a stationary distribution.
+
+
+
+**Effective Sample Size**
+
+```{r}
+effectiveSize(mod1_log_new)
+```
+
+All variables have a big enough Effective Sample Size to assume that the model converges.
+
+
+
+**POSTERIOR DENSITIES**
+
+```{r}
+denplot(mod1_log_new, parms= c('a0','alpha'))
+```
+
+
+
+
+## FREQUENTIST INFERENCE
+
+```{r}
+freq_mod = glm(data1$data.Round ~ data1$wing+data1$vert+data1$body+data1$sprint, family=binomial(link="logit"), data = data1)
+summary(freq_mod)
+```
+
+#### FREQUENTIST VS BAYESIAN FIRST MODEL
+
+```{r}
+comparison1=as.table(cbind(freq_mod$coefficients,colMeans(mod1_logch)))
+colnames(comparison1) <- c("Frequentist","Bayesian_first_model")
+comparison1
+```
+
+Coefficients differ quite a lot, likely because the bayesian model doesn't converge.
+
+#### FREQUENTIST VS BAYESIAN IMPROVED MODEL
+
+```{r}
+comparison=as.table(cbind(freq_mod$coefficients,colMeans(mod1_logch_new)))
+colnames(comparison) <- c("Frequentist","Bayesian")
+comparison
+```
+
+Values look quite similar, probably due to the improvements for convergence used.
+
+
+
+## DOES THE MODEL RECOVER SOME FEATURES OF THE OBSERVED DATA?
+
+What happens when we only take values when the response variable equals 1?
+Do the results match with the coefficients of the bayesian model?
+
+
+```{r}
+data11 = data1[data1$data.Round == 1, ]
+head(data11)
+```
+
+```{r}
+par(mfrow=c(2,2))
+hist(main='Wingspan',data11$wing,xlab='Index',ylab='Density',col='blue')
+hist(main='Vertical Max Jump',data11$vert,xlab='Index',ylab='Density',col='blue')
+hist(main='Body Fat',data11$body,xlab='Index',ylab='Density', col='blue')
+hist(main='Sprint',data11$sprint,xlab='Index',ylab='Density',col='blue')
+```
+
+```{r}
+colMeans(mod1_logch_new)
+```
+
+In case of the 'wingspan' variable, it is interesting to see that its the largest positive value. This might suppose a good starting point to draw an hypothesis stating that wingspan is important when a franchise chooses a player. As well, although both 'body fat' and 'sprint' present fat tails, its alphas are positive and negative respectively. 
+
+
