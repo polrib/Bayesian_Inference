@@ -1,0 +1,65 @@
+---
+title: "HW1 part 2"
+author: "Pol Ribo Leon; 1840853"
+date: "15 de mayo de 2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+To find the marginal likelihood we assume a model for the data, which depends on a variable theta. As we are not sure on the exact value of theta, we choose it to follow a distribution p(theta|alpha) specified by a constant parameter alpha. So, now the distribution of X is directly determined by alpha . This way, we can calculate the marginal likelihood by integrating out the variable theta. 
+
+As of this;
+Marginal Likelihood
+$m(y)=\int_{\Theta}L(\theta)\pi(\theta)d\theta$,
+
+Given our likelihood function of the chosen model(Poisson,2)
+
+$L(\theta)= \prod_{i=1}^n f(yi|\theta)= \prod_{i=1}^n \frac{\exp^{-\theta}\theta^{yi}}{yi!}= \frac{e^{-\theta n} \theta^{\sum_{i=1}^{n} yi}} {\prod_{i=1}^n yi!}$
+
+We choose theta to follow a Gamma(1,1) distribution.
+$\theta\approx Gamma(1,1)$. 
+
+As, so $\pi(\theta)= \frac{\beta^\alpha}{\Gamma(\alpha)} \theta^{\alpha-1}e^{-\beta\theta}$-> $\pi(\theta)=e^{-\theta}$
+
+We integrate, over the support of the Gamma distribution->(0,Inf)
+
+**Solving the integral**
+
+$m(y)=\int_0^\infty \frac{e^{-\theta n} \theta^{\sum_{i=1}^{n} yi}} {\prod_{i=1}^n yi!}e^{-\theta}d\theta= \frac{1}{{\prod_{i=1}^n yi!}}\int_0^\infty e^{-\theta(n+1)}\theta^{\sum_{i=1}^{n} yi}d\theta$
+
+Now we take advantage of the property distribution support is always equal 1.
+
+$\int_0^\infty \frac{\beta^\alpha}{\Gamma(\alpha)}\theta^{\alpha-1}e^{-\beta\theta}d\theta= 1$ 
+
+$\int_0^\infty \theta^{\alpha-1}e^{-\beta\theta}d\theta= \frac{\Gamma(\alpha)}{\beta^\alpha}$
+
+This way $\alpha=\sum_{i=1}^nyi+1$ and $\beta=n+1$
+
+Then, by substitution, the computation follows;
+
+$\int_0^x \theta^{\sum_{i=1}^n y}e^{-(n+1)\theta}d\theta=\frac{\Gamma(\sum_{i=1}^{n} yi+1)}{(n+1)^{\sum_{i=1}^nyi+1}}$
+
+And finally,
+
+$m(y1,...yn)=\int_0^x \theta^{\sum_{i=1}^n y}e^{-(n+1)\theta}d\theta=\frac{\Gamma(\sum_i=1^n yi+1)}{\prod_{i=1}^{n}yi!(n+1)^{\sum_{i=1}^nyi+1}}=\frac{\Gamma(25)}{1327104(11^{25})}=4.315028e-09$
+
+```{r}
+
+set.seed(123)
+
+pois=rpois(10,2)
+prod=1
+
+for (i in 1:10){
+  print(pois[i])
+  prod=prod*factorial(pois[i])
+}
+
+#Gamma(25)=!24
+factorial(24)/(prod*(11^25))
+```
+
